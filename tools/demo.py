@@ -31,6 +31,7 @@ from nets.vgg16 import vgg16
 from nets.resnet_v1 import resnetv1
 # import convert_kernel
 from davelib.convert_kernel import *
+from davelib.compression_stats import *
 
 CLASSES = ('__background__',
            'aeroplane', 'bicycle', 'bird', 'boat',
@@ -116,6 +117,12 @@ if __name__ == '__main__':
     cfg.TEST.HAS_RPN = True  # Use RPN for proposals
     args = parse_args()
 
+
+    stats = CompressionStats(filename='CompressionStats_31,33.pi')
+    stats.plot(plot_type_label=('base_mean','diff_mean','var_redux'))
+    exit()
+
+
     # model path
     demonet = args.demo_net
     dataset = args.dataset
@@ -149,7 +156,7 @@ if __name__ == '__main__':
 
     print('Loaded network {:s}'.format(tfmodel))
     
-    view(net, sess, tfmodel)
+    view(net, sess, tfmodel, tfconfig)
     exit()
 
     im_names = ['000456.jpg', '000542.jpg', '001150.jpg',

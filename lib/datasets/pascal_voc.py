@@ -216,7 +216,7 @@ class pascal_voc(imdb):
                            dets[k, 0] + 1, dets[k, 1] + 1,
                            dets[k, 2] + 1, dets[k, 3] + 1))
 
-  def _do_python_eval(self, output_dir='output'):
+  def _do_python_eval(self, output_dir='output', sample_images=None):
     annopath = os.path.join(
       self._devkit_path,
       'VOC' + self._year,
@@ -241,7 +241,7 @@ class pascal_voc(imdb):
       filename = self._get_voc_results_file_template().format(cls)
       rec, prec, ap = voc_eval(
         filename, annopath, imagesetfile, cls, cachedir, ovthresh=0.5,
-        use_07_metric=use_07_metric)
+        use_07_metric=use_07_metric, sample_images=sample_images)
       aps += [ap]
       print(('AP for {} = {:.4f}'.format(cls, ap)))
       with open(os.path.join(output_dir, cls + '_pr.pkl'), 'wb') as f:
@@ -276,9 +276,9 @@ class pascal_voc(imdb):
     print(('Running:\n{}'.format(cmd)))
     status = subprocess.call(cmd, shell=True)
 
-  def evaluate_detections(self, all_boxes, output_dir):
+  def evaluate_detections(self, all_boxes, output_dir, sample_images=None):
     self._write_voc_results_file(all_boxes)
-    self._do_python_eval(output_dir)
+    self._do_python_eval(output_dir, sample_images)
     if self.config['matlab_eval']:
       self._do_matlab_eval(output_dir)
     if self.config['cleanup']:

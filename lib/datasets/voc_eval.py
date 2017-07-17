@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 import os
 import pickle
 import numpy as np
+# from tools.test_net import sample_names
 
 def parse_rec(filename):
   """ Parse a PASCAL VOC xml file """
@@ -72,7 +73,8 @@ def voc_eval(detpath,
              classname,
              cachedir,
              ovthresh=0.5,
-             use_07_metric=False):
+             use_07_metric=False,
+             sample_images=None):
   """rec, prec, ap = voc_eval(detpath,
                               annopath,
                               imagesetfile,
@@ -130,6 +132,8 @@ def voc_eval(detpath,
   # extract gt objects for this class
   class_recs = {}
   npos = 0
+  if sample_images:
+    imagenames = sample_images
   for imagename in imagenames:
     R = [obj for obj in recs[imagename] if obj['name'] == classname]
     bbox = np.array([x['bbox'] for x in R])
@@ -144,8 +148,16 @@ def voc_eval(detpath,
   detfile = detpath.format(classname)
   with open(detfile, 'r') as f:
     lines = f.readlines()
-
+    
   splitlines = [x.strip().split(' ') for x in lines]
+  
+  if sample_images:
+    new_splitlines = []
+    for x in splitlines:
+      if x[0] in sample_images:
+        new_splitlines.append(x)
+    splitlines = new_splitlines
+    
   image_ids = [x[0] for x in splitlines]
   confidence = np.array([float(x[1]) for x in splitlines])
   BB = np.array([[float(z) for z in x[2:]] for x in splitlines])
@@ -190,7 +202,7 @@ def voc_eval(detpath,
 
       if ovmax > ovthresh:
         if not R['difficult'][jmax]:
-          if not R['det'][jmax]:
+          if not R['det'][jmax]: 
             tp[d] = 1.
             R['det'][jmax] = 1
           else:

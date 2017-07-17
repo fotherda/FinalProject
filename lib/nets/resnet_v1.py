@@ -293,7 +293,7 @@ class resnetv1(Network):
         sess.run(tf.assign(self._variables_to_fix[self._resnet_scope + '/conv1/weights:0'], 
                            tf.reverse(conv1_rgb, [2])))
         
-  def get_outputs(self, blobs, compressed_layers, sess):
+  def get_outputs(self, blobs, compressed_layers, sess, other_layers=None):
     feed_dict = {self._image: blobs['data'],
                  self._im_info: blobs['im_info']}
     fetches = {}
@@ -306,6 +306,9 @@ class resnetv1(Network):
           for comp_layer in compressed_layers:
             if comp_layer.net_layer(self._resnet_scope) in alias:
               fetches[comp_layer] = tensor
+#           for other_ouptut in other_layers:
+#             if other_ouptut in alias:
+#               fetches[other_ouptut] = tensor
               
     outputs = sess.run(fetches, feed_dict=feed_dict)
     

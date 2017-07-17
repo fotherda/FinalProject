@@ -8,16 +8,19 @@ from __future__ import division
 from __future__ import print_function
 
 import _init_paths
-from model.test import test_net
+from model.test import test_net, test_net_with_sample
 from model.config import cfg, cfg_from_file, cfg_from_list
 from datasets.factory import get_imdb
 import argparse
 import pprint
 import time, os, sys
+import pickle
 
 import tensorflow as tf
 from nets.vgg16 import vgg16
 from nets.resnet_v1 import resnetv1
+
+from davelib.voc_img_sampler import VOCImgSampler
 
 def parse_args():
   """
@@ -46,6 +49,9 @@ def parse_args():
   parser.add_argument('--set', dest='set_cfgs',
                         help='set config keys', default=None,
                         nargs=argparse.REMAINDER)
+  parser.add_argument('--num_imgs', dest='num_imgs',
+                      help='size of sub-sample',
+                      default=0, type=int)
 
   if len(sys.argv) == 1:
     parser.print_help()
@@ -81,6 +87,19 @@ if __name__ == '__main__':
 
   imdb = get_imdb(args.imdb_name)
   imdb.competition_mode(args.comp_mode)
+  
+  if False:
+    sampler = VOCImgSampler()
+    sample_names = sampler.get_imgs(500)
+    all_boxes = []
+    output_dir = '/home/david/host/res101_faster_rcnn_iter_110000_n300'
+    det_file = os.path.join(output_dir, 'detections.pkl')
+    with open(det_file, 'rb') as f:
+      all_boxes = pickle.load(f)
+  
+    print('Evaluating detections')
+    imdb.evaluate_detections(all_boxes, output_dir, sample_images=sample_names)
+    exit()
 
   tfconfig = tf.ConfigProto(allow_soft_placement=True)
   tfconfig.gpu_options.allow_growth=True
@@ -114,6 +133,11 @@ if __name__ == '__main__':
     sess.run(tf.global_variables_initializer())
     print('Loaded.')
 
-  test_net(sess, net, imdb, filename, max_per_image=args.max_per_image)
+  if args.num_imgs > 0:
+    sampler = VOCImgSampler()
+    sample_names = sampler.get_imgs(args.num_imgs)
+    test_net_with_sample(sess, net, imdb, filename, sample_names, max_per_image=args.max_per_image)
+  else:  
+    test_net(sess, net, imdb, filename, max_per_image=args.max_per_image)
 
   sess.close()

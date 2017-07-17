@@ -99,12 +99,11 @@ def conv2d_same(inputs, num_outputs, kernel_size, stride, rate=1, scope=None):
 
 class resnetv1_sep(resnetv1):
     
-  def __init__(self, K, batch_size, num_layers, comp_weights_dict, K_by_layer_dict):
+  def __init__(self, scope_idx, batch_size, num_layers, comp_weights_dict, K_by_layer_dict):
     resnetv1.__init__(self, batch_size, num_layers)
-    self._resnet_scope = 'resnet_v1_sep_K%d_%d' % (K, num_layers)  
+    self._resnet_scope = 'resnet_v1_sep%d_%d' % (scope_idx, num_layers)  
     self._comp_weights_dict = comp_weights_dict
     self._K_by_layer_dict = K_by_layer_dict
-    self._K = K
 
   def build_network(self, sess, is_training=True):
     # select initializers
