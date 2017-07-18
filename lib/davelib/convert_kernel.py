@@ -434,6 +434,7 @@ def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
 #     Ks = [1, 5, 20]
 #     Ks = [1, 250, 768]
     layer_idxs = [10,30]
+    layer_idxs = range(34)
 #     layer_idxs = [10,20,31,33]
 
 #     stats = CompressionStats(filename='CompressionStats_31,33.pi', filename_suffix='31,33')
