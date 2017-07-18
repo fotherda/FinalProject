@@ -218,12 +218,9 @@ class SeparableNet(object):
     return [assign_op_1, assign_op_2]
 
 
-  def compare_outputs(self, blobs, sess, base_outputs, compressed_layers=[], 
+  def compare_outputs(self, blobs, sess, base_outputs, final_layer, compressed_layers=[], 
                       plot=False):
-  #     final_output = LayerName('block4/unit_3/bottleneck_v1/conv3')
-    final_output = LayerName('block4/unit_3/bottleneck_v1/conv3/BatchNorm')
-
-    compressed_layers.append(final_output)
+    compressed_layers.append(final_layer)
 
     if base_outputs is None:
       base_outputs = self._base_net.get_outputs(blobs, compressed_layers, sess)
@@ -365,10 +362,8 @@ def get_blobs():
     return blobs
         
 def get_layer_names():    
-    
     layers = []
     layers.append( LayerName('conv1/weights') )
-    
     d = {'1':3, '2':4, '3':23, '4':3}
     block_layer_dict = OrderedDict(sorted(d.items(), key=lambda t: t[0]))
 
@@ -376,9 +371,7 @@ def get_layer_names():
       for unit_num in range(1,num_layers+1):
         layers.append( LayerName('block'+block_num+'/unit_'+str(unit_num)+
                                  '/bottleneck_v1/conv2/weights') )
-      
     return layers
-    
     
 def get_Ks(layer, K_fractions):
   shape = None
@@ -407,16 +400,15 @@ def get_Ks(layer, K_fractions):
       
 def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
 #     show_all_variables(True, 'resnet_v1_101/')
-
-    layers_names = get_layer_names()
     
     blobs = get_blobs()
-    final_output = LayerName('block4/unit_3/bottleneck_v1/conv3/BatchNorm')
-
-    base_outputs = base_net.get_outputs(blobs, [final_output], sess)
+    final_layer = LayerName('block4/unit_3/bottleneck_v1/conv3')
+    base_outputs = base_net.get_outputs(blobs, [final_layer], sess)
     
     base_variables = tf.global_variables()
-    default_graph = tf.get_default_graph()
+#     default_graph = tf.get_default_graph()
+
+    layers_names = get_layer_names()
     
     var_count_dict = OrderedDict()
     for layer_name in layers_names:
@@ -442,40 +434,40 @@ def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
 
     sess.close()
     scope_idx=1
-    with default_graph.as_default():
-      for l, layer_name in enumerate(layers_names):
-        if l not in layer_idxs:
-          continue
-        sess = tf.Session(config=tfconfig)
-        Ks = get_Ks(layer_name, [0,0.1,0.25,0.5,1])
-        for k in Ks:
-          comp_weights_dict = { layer_name: all_comp_weights_dict[layer_name] }
-          K_by_layer_dict = CompressedNetDescription([layer_name],[k])
+#     with default_graph.as_default():
+    for l, layer_name in enumerate(layers_names):
+      if l not in layer_idxs:
+        continue
+      sess = tf.Session(config=tfconfig)
+      Ks = get_Ks(layer_name, [0,0.1,0.25,0.5,1])
+      for k in Ks:
+        comp_weights_dict = { layer_name: all_comp_weights_dict[layer_name] }
+        K_by_layer_dict = CompressedNetDescription([layer_name],[k])
 #           stats.set(K_by_layer_dict, 'dummy', 0)
-          
-          sep_net = SeparableNet(scope_idx, base_net, sess, saved_model_path, comp_weights_dict,\
-                                 K_by_layer_dict, var_count_dict, base_variables)
-          
-          base_mean, diff_mean, diff_stdev, diff_max = \
-            sep_net.compare_outputs(blobs, sess, base_outputs)
-    
-          stats.set(K_by_layer_dict, 'base_mean', base_mean)
-          stats.set(K_by_layer_dict, 'diff_mean', diff_mean)
-          stats.set(K_by_layer_dict, 'diff_stdev', diff_stdev)
-          stats.set(K_by_layer_dict, 'diff_max', diff_max)
-          stats.set(K_by_layer_dict, 'var_redux', sep_net.get_reduced_var_count())
+        
+        sep_net = SeparableNet(scope_idx, base_net, sess, saved_model_path, comp_weights_dict,\
+                               K_by_layer_dict, var_count_dict, base_variables)
+        
+        base_mean, diff_mean, diff_stdev, diff_max = \
+          sep_net.compare_outputs(blobs, sess, base_outputs, final_layer)
   
-          num_imgs = 100
-          mAP = sep_net.run_test_metric(num_imgs)
-          stats.set(K_by_layer_dict, 'mAP_%d_top%d'%(num_imgs,cfg.TEST.RPN_POST_NMS_TOP_N), mAP)
-          stats.save()
-          print layer_name + ' K=' + str(k) + ' complete'
+        stats.set(K_by_layer_dict, 'base_mean', base_mean)
+        stats.set(K_by_layer_dict, 'diff_mean', diff_mean)
+        stats.set(K_by_layer_dict, 'diff_stdev', diff_stdev)
+        stats.set(K_by_layer_dict, 'diff_max', diff_max)
+        stats.set(K_by_layer_dict, 'var_redux', sep_net.get_reduced_var_count())
 
-  #         show_all_variables(True, sep_net._net_sep.get_scope())
-          scope_idx += 1
+        num_imgs = 100
+        mAP = sep_net.run_test_metric(num_imgs)
+        stats.set(K_by_layer_dict, 'mAP_%d_top%d'%(num_imgs,cfg.TEST.RPN_POST_NMS_TOP_N), mAP)
+        stats.save()
+        print layer_name + ' K=' + str(k) + ' complete'
+
+#         show_all_variables(True, sep_net._net_sep.get_scope())
+        scope_idx += 1
 #         tf.reset_default_graph()
-        sess.close()
-  #         show_all_variables(True, sep_net._net_sep.get_scope())
+      sess.close()
+#         show_all_variables(True, sep_net._net_sep.get_scope())
   
     exit()
 

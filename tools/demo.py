@@ -117,10 +117,10 @@ if __name__ == '__main__':
     cfg.TEST.HAS_RPN = True  # Use RPN for proposals
     args = parse_args()
 
-    stats = CompressionStats(filename='CompressionStats_.pi')
-    stats.plot(plot_type_label=('base_mean','diff_mean'))#,'mAP_100_top100','mAP_10_top100'))
-#     stats.plot(plot_type_label=('base_mean','diff_mean','var_redux','mAP_10_top100'))
-    exit()
+#     stats = CompressionStats(filename='CompressionStats_.pi')
+#     stats.plot(plot_type_label=('base_mean','diff_mean'))#,'mAP_100_top100','mAP_10_top100'))
+# #     stats.plot(plot_type_label=('base_mean','diff_mean','var_redux','mAP_10_top100'))
+#     exit()
 
 
     # model path
