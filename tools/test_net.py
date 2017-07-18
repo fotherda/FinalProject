@@ -135,8 +135,8 @@ if __name__ == '__main__':
 
   if args.num_imgs > 0:
     sampler = VOCImgSampler()
-    sample_names = sampler.get_imgs(args.num_imgs)
-    test_net_with_sample(sess, net, imdb, filename, sample_names, max_per_image=args.max_per_image)
+    sample_images = sampler.get_imgs(args.num_imgs)
+    mAP = test_net_with_sample(sess, net, imdb, filename, sample_images, max_per_image=args.max_per_image)
   else:  
     test_net(sess, net, imdb, filename, max_per_image=args.max_per_image)
 

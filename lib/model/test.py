@@ -187,8 +187,8 @@ def test_net(sess, net, imdb, weights_filename, max_per_image=100, thresh=0.05):
     _t['misc'].toc()
 
     print('im_detect: {:d}/{:d} {:.3f}s {:.3f}s' \
-        .format(i + 1, num_images, _t['im_detect'].average_time,
-            _t['misc'].average_time))
+        .format(i + 1, num_images, _t['im_detect'].diff_time,
+            _t['misc'].diff_time))
 
   det_file = os.path.join(output_dir, 'detections.pkl')
   with open(det_file, 'wb') as f:
@@ -197,10 +197,10 @@ def test_net(sess, net, imdb, weights_filename, max_per_image=100, thresh=0.05):
   print('Evaluating detections')
   imdb.evaluate_detections(all_boxes, output_dir)
 
-def test_net_with_sample(sess, net, imdb, weights_filename, sample_names, max_per_image=100, thresh=0.05):
+def test_net_with_sample(sess, net, imdb, weights_filename, sample_images, max_per_image=100, thresh=0.05):
   np.random.seed(cfg.RNG_SEED)
   """Test a Fast R-CNN network on an image database."""
-  num_images = len(sample_names)
+  num_images = len(sample_images)
 #   num_images = len(imdb.image_index)
   # all detections are collected into:
   #  all_boxes[cls][image] = N x 5 array of detections in
@@ -215,7 +215,7 @@ def test_net_with_sample(sess, net, imdb, weights_filename, sample_names, max_pe
 #   for i in range(2):
   for i in range(num_images):
     
-    im = cv2.imread(imdb.image_path_from_index(sample_names[i]))
+    im = cv2.imread(imdb.image_path_from_index(sample_images[i]))
 
     _t['im_detect'].tic()
     scores, boxes = im_detect(sess, net, im)
@@ -254,4 +254,5 @@ def test_net_with_sample(sess, net, imdb, weights_filename, sample_names, max_pe
     pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
 
   print('Evaluating detections')
-  imdb.evaluate_detections(all_boxes, output_dir)
+  mAP = imdb.evaluate_detections(all_boxes, output_dir, sample_images)
+  return mAP

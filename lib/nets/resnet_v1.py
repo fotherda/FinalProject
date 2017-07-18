@@ -306,9 +306,6 @@ class resnetv1(Network):
           for comp_layer in compressed_layers:
             if comp_layer.net_layer(self._resnet_scope) in alias:
               fetches[comp_layer] = tensor
-#           for other_ouptut in other_layers:
-#             if other_ouptut in alias:
-#               fetches[other_ouptut] = tensor
               
     outputs = sess.run(fetches, feed_dict=feed_dict)
     

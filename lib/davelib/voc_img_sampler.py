@@ -57,12 +57,12 @@ class VOCImgSampler:
         sample_names_dict = pi.load(f)
         if num_imgs not in sample_names_dict:
           sample_names = []
-          sample_names_dict = {num_imgs: sample_names}
+          sample_names_dict[num_imgs] = sample_names
         else:
           return sample_names_dict[num_imgs]
     else:
       sample_names = []
-      sample_names_dict = {num_imgs: sample_names}
+      sample_names_dict[num_imgs] = sample_names
           
     target_ratios = self.get_ratios(self._class_img_dict)  
     sample_class_img_dict = {}

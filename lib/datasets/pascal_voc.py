@@ -198,14 +198,18 @@ class pascal_voc(imdb):
       filename)
     return path
 
-  def _write_voc_results_file(self, all_boxes):
+  def _write_voc_results_file(self, all_boxes, sample_images=None):
+    if sample_images:
+      image_index = sample_images
+    else:
+      image_index = self.image_index
     for cls_ind, cls in enumerate(self.classes):
       if cls == '__background__':
         continue
       print('Writing {} VOC results file'.format(cls))
       filename = self._get_voc_results_file_template().format(cls)
       with open(filename, 'wt') as f:
-        for im_ind, index in enumerate(self.image_index):
+        for im_ind, index in enumerate(image_index):
           dets = all_boxes[cls_ind][im_ind]
           if dets == []:
             continue
@@ -260,6 +264,7 @@ class pascal_voc(imdb):
     print('Recompute with `./tools/reval.py --matlab ...` for your paper.')
     print('-- Thanks, The Management')
     print('--------------------------------------------------------------')
+    return np.mean(aps)
 
   def _do_matlab_eval(self, output_dir='output'):
     print('-----------------------------------------------------')
@@ -277,8 +282,8 @@ class pascal_voc(imdb):
     status = subprocess.call(cmd, shell=True)
 
   def evaluate_detections(self, all_boxes, output_dir, sample_images=None):
-    self._write_voc_results_file(all_boxes)
-    self._do_python_eval(output_dir, sample_images)
+    self._write_voc_results_file(all_boxes, sample_images)
+    mAP = self._do_python_eval(output_dir, sample_images)
     if self.config['matlab_eval']:
       self._do_matlab_eval(output_dir)
     if self.config['cleanup']:
@@ -287,6 +292,7 @@ class pascal_voc(imdb):
           continue
         filename = self._get_voc_results_file_template().format(cls)
         os.remove(filename)
+    return mAP
 
   def competition_mode(self, on):
     if on:
