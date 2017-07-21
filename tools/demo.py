@@ -123,6 +123,8 @@ if __name__ == '__main__':
 #     exit()
 
 
+    pre_tasks()
+
     # model path
     demonet = args.demo_net
     dataset = args.dataset

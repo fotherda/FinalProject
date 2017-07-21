@@ -86,17 +86,22 @@ class CompressionStats(object):
       a = plt.subplot(n_rows, n_columns, plt_idx)
       plt_idx += 1
  
+      layer_idxs = []
       for j, (layer, d2) in enumerate(sorted(d.iteritems())):
 #         if j not in [31,33]:
 #           continue
         Ks = []
+        layer_idxs.append(j)
         for k, (K, val) in enumerate(sorted(d2.iteritems())):
           plot_data[k,j] = val
           Ks.append(K)
 #           plot_data[k,j] = self._stats[type_label][layer][K]
-     
-        plt.plot(Ks, plot_data[:,j],'o-')
-        legend_labels.append(layer)
+
+      for k, (K, val) in enumerate(sorted(d2.iteritems())):
+        plt.plot(layer_idxs, plot_data[k,:],'o-')
+        legend_labels.append('K=%d'%K)
+#         plt.plot(Ks, plot_data[:,j],'o-')
+#       legend_labels.append(layer)
 #       legend_labels.append(type_label)
 #       plt.plot(range(1,num_layers+1), plot_data[0,:],'ro-')
       plt.ylabel(type_label)
@@ -105,6 +110,52 @@ class CompressionStats(object):
 #       plt.ylabel(type_label)
     plt.legend(legend_labels)
 #       plt.xlabel('layer index')
+    plt.show()  
+
+     
+  def plot_by_Kfracs(self, Kfracs, plot_type_label=None):
+    base_total = 47567455 # total no. parameters in base net
+    plot_data = []
+     
+    for ii, (net_desc, data_dict) in enumerate(sorted(self._stats.iteritems())):
+      for i, (type_label, value) in enumerate(sorted(data_dict.iteritems())):
+        if plot_type_label and type_label not in plot_type_label:
+          continue
+        if type_label =='var_redux':
+          value = int( (base_total - value) / 1000000 )
+        plot_data.append(value)
+        
+    plt.ticklabel_format(style='plain')
+    plt.plot(Kfracs, plot_data,'o-')
+    plt.ylabel('No. parameters in net $x10^6$')
+#     plt.ylabel('mAP')
+    plt.xlabel(r'fraction of $K_{max}$')
+    plt.show()  
+     
+       
+  def plot_K_by_layer(self, layers_names, Kfracs, plot_type_label=None):
+    plt.title('Profile of layer compressions',fontsize=16)
+    legend_labels = []
+     
+    for ii, (net_desc, data_dict) in enumerate(sorted(self._stats . iteritems())):
+      for i, (type_label, value) in enumerate(sorted(data_dict.iteritems())):
+        if plot_type_label and type_label not in plot_type_label:
+          continue
+        num_layers = len(net_desc)
+        plot_data = []
+        x = range(0,num_layers)
+        for layer in layers_names:
+          K = net_desc[layer]
+          plot_data.append(K)
+        plt.plot(x, plot_data,'o-')
+        legend_labels.append('%.2f'%Kfracs[ii])
+    
+    plt.ylabel('K', fontsize=16)
+    plt.xlabel('layer', fontsize=16)
+    
+    layers_names = [name.replace('/bottleneck_v1/conv2','') for name in layers_names]
+    plt.xticks(x, layers_names, rotation='vertical')
+    plt.legend(legend_labels, title=r'fraction of $K_{max}$')
     plt.show()  
      
        

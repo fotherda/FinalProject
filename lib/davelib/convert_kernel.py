@@ -11,7 +11,10 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 import math
+import os.path as osp
 
+
+from tensorflow.python.platform import gfile
 from model.config import cfg
 from resnet_v1_sep import resnetv1_sep
 from model.test import _get_blobs
@@ -36,14 +39,15 @@ figure_path = '/home/david/host/figures'
 def show_all_variables(show, *args):
   total_count = 0
   for idx, op in enumerate(tf.global_variables()):
-    for name_filter in args:
-      if name_filter not in op.name:
-        continue
-      shape = op.get_shape()
-      count = np.prod(shape)
-      if show:
-        print("[%2d] %s %s = %s" % (idx, op.name, shape, count))
-      total_count += int(count)
+    if args:
+      for name_filter in args:
+        if name_filter not in op.name:
+          continue
+    shape = op.get_shape()
+    count = np.prod(shape)
+    if show:
+      print("[%2d] %s %s = %s" % (idx, op.name, shape, count))
+    total_count += int(count)
   if show:
     print("[Total] variable size: %s" % "{:,}".format(total_count))
   return total_count
@@ -122,13 +126,15 @@ class SeparableNet(object):
     self.assign_trained_weights_to_separable_layers()  
     
   def run_test_metric(self, num_imgs):
-
-    sampler = VOCImgSampler()
-    sample_images = sampler.get_imgs(num_imgs)
     imdb = get_imdb('voc_2007_test')
     filename ='default/res101_faster_rcnn_iter_110000'
     
-    mAP = test_net_with_sample(self._sess, self._net_sep, imdb, filename, sample_images, 
+    if num_imgs == len(imdb.image_index):
+      mAP = test_net(self._sess, self._net_sep, imdb, filename, max_per_image=100)
+    else:
+      sampler = VOCImgSampler()
+      sample_images = sampler.get_imgs(num_imgs)
+      mAP = test_net_with_sample(self._sess, self._net_sep, imdb, filename, sample_images, 
                          max_per_image=100)
     return mAP
 
@@ -398,6 +404,36 @@ def get_Ks(layer, K_fractions):
   return Ks
       
       
+def pre_tasks():
+    return
+    stats = CompressionStats(filename='CompressionStats_.pi')
+#     stats = CompressionStats(filename='CompressionStats_allx5K.pi')
+#     stats.plot(plot_type_label=('base_mean','diff_mean','mAP_1000_top150'))
+
+    stats.plot_by_Kfracs(Kfracs = [0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1], 
+                         plot_type_label=('var_redux'))
+#     stats.plot_K_by_layer(get_layer_names(), Kfracs = [0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1], plot_type_label=('mAP_200_top150'))
+
+
+#     stats.plot(plot_type_label=('base_mean','diff_mean','var_redux','mAP_10_top100'))
+    exit()
+
+    return
+    outdir = osp.abspath(osp.join(cfg.ROOT_DIR, 'graph_defs'))
+    
+    model_filename = outdir+'/tensorflow_inception_graph.pb'
+    with gfile.FastGFile(model_filename, 'rb') as f:
+        graph_def = tf.GraphDef()
+        graph_def.ParseFromString(f.read())
+        g_in = tf.import_graph_def(graph_def)
+#   LOGDIR='YOUR_LOG_LOCATION'
+#   train_writer = tf.summary.FileWriter(LOGDIR)
+#   train_writer.add_graph(sess.graph)
+
+    for n in graph_def.node: 
+      if n.name == 'input' or n.name == 'output':
+        print n
+      
 def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
 #     show_all_variables(True, 'resnet_v1_101/')
     
@@ -406,9 +442,50 @@ def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
     base_outputs = base_net.get_outputs(blobs, [final_layer], sess)
     
     base_variables = tf.global_variables()
-#     default_graph = tf.get_default_graph()
+    default_graph = tf.get_default_graph()
+    outdir = osp.abspath(osp.join(cfg.ROOT_DIR, 'graph_defs'))      
+
+#     saver = tf.train.Saver(restore_var_dict)
+#     saver.restore(self._sess, self._saved_model_path)
+# 
+# 
+#     self.saver = tf.train.Saver(max_to_keep=100000)
+#     # Write the train and validation information to tensorboard
+#     self.writer = tf.summary.FileWriter(self.tbdir, sess.graph)
+
+    if False:
+      writer = tf.summary.FileWriter(logdir=outdir, graph=sess.graph)
+      writer.flush()
+  
+  
+      with sess.as_default():
+        nodes_to_preserve = []
+        for n in tf.get_default_graph().as_graph_def().node:
+    #       if n.name == 'resnet_v1_101/Pad_1/paddings':
+    #       if n.name == 'resnet_v1_101_5/Mean/reduction_indices':
+          if n.name == 'resnet_v1_101/block1/unit_3/bottleneck_v1/conv3/weights/Initializer/truncated_normal/shape':
+            break
+          nodes_to_preserve.append(n.name)
+          print n
+    
+        
+        subgraph = tf.graph_util.extract_sub_graph(default_graph.as_graph_def(), nodes_to_preserve)
+        tf.reset_default_graph()
+        tf.import_graph_def(subgraph)
+    
+        writer = tf.summary.FileWriter(logdir=outdir, graph=sess.graph)
+        writer.flush()
+  
+  
+  #     graph_def = tf.get_default_graph().as_graph_def()
+  #     graphpb_txt = str(a.graph.as_graph_def())
+  #     with open('graphpb.txt', 'w') as f: f.write(graphpb_txt)
+  
+  
+      tf.train.write_graph(tf.get_default_graph(), outdir, 'resnet101_v1', as_text=False)
 
     layers_names = get_layer_names()
+
     
     var_count_dict = OrderedDict()
     for layer_name in layers_names:
@@ -425,8 +502,8 @@ def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
 #     Ks = range(1,11)
 #     Ks = [1, 5, 20]
 #     Ks = [1, 250, 768]
-    layer_idxs = [10,30]
-    layer_idxs = range(34)
+    layer_idxs = [0]
+#     layer_idxs = range(34)
 #     layer_idxs = [10,20,31,33]
 
 #     stats = CompressionStats(filename='CompressionStats_31,33.pi', filename_suffix='31,33')
@@ -439,10 +516,23 @@ def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
       if l not in layer_idxs:
         continue
       sess = tf.Session(config=tfconfig)
-      Ks = get_Ks(layer_name, [0,0.1,0.25,0.5,1])
-      for k in Ks:
-        comp_weights_dict = { layer_name: all_comp_weights_dict[layer_name] }
-        K_by_layer_dict = CompressedNetDescription([layer_name],[k])
+      Kfracs = [0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1]
+      Ks = get_Ks(layer_name, Kfracs)
+      for j, k in enumerate(Ks):
+#         if j not in [0,1,2,3,]:
+#           continue
+        
+        K_by_layer = []
+        comp_weights_dict = {}
+        for layer_name in layers_names:
+          comp_weights_dict[layer_name] = all_comp_weights_dict[layer_name]
+          K = get_Ks(layer_name, [Kfracs[j]])
+          K_by_layer.extend(K)
+        
+        K_by_layer_dict = CompressedNetDescription(layers_names, K_by_layer)
+        
+#         comp_weights_dict = { layer_name: all_comp_weights_dict[layer_name] }
+#         K_by_layer_dict = CompressedNetDescription([layer_name],[k])
 #           stats.set(K_by_layer_dict, 'dummy', 0)
         
         sep_net = SeparableNet(scope_idx, base_net, sess, saved_model_path, comp_weights_dict,\
@@ -457,7 +547,8 @@ def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
         stats.set(K_by_layer_dict, 'diff_max', diff_max)
         stats.set(K_by_layer_dict, 'var_redux', sep_net.get_reduced_var_count())
 
-        num_imgs = 100
+        num_imgs = 4952
+#         num_imgs = 200
         mAP = sep_net.run_test_metric(num_imgs)
         stats.set(K_by_layer_dict, 'mAP_%d_top%d'%(num_imgs,cfg.TEST.RPN_POST_NMS_TOP_N), mAP)
         stats.save()

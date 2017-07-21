@@ -1,3 +1,50 @@
+
+
+
+name: "input"
+op: "Placeholder"
+device: "/cpu:0"
+attr {
+  key: "dtype"
+  value {
+    type: DT_FLOAT
+  }
+}
+attr {
+  key: "shape"
+  value {
+    shape {
+    }
+  }
+}
+
+
+
+name: "output"
+op: "Identity"
+input: "softmax0"
+device: "/cpu:0"
+attr {
+  key: "T"
+  value {
+    type: DT_FLOAT
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 [ 0] resnet_v1_101/conv1/weights:0 (7, 7, 3, 64) = 9408
 [ 1] resnet_v1_101/conv1/BatchNorm/beta:0 (64,) = 64
 [ 2] resnet_v1_101/conv1/BatchNorm/gamma:0 (64,) = 64

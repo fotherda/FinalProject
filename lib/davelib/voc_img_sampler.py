@@ -8,7 +8,8 @@ import numpy as np
 import collections
 import copy
 import sys, os
-cachefile = '/home/david/Project/tf-faster-rcnn_27/data/VOCdevkit2007/annotations_cache/annots.pkl'
+# cachefile = '/home/david/Project/tf-faster-rcnn_27/data/VOCdevkit2007/annotations_cache/annots.pkl'
+cachefile = 'data/VOCdevkit2007/annotations_cache/annots.pkl'
 sample_file = 'sample_imgs.pi'
 
 
