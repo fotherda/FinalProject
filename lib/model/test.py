@@ -122,7 +122,6 @@ def apply_nms(all_boxes, thresh):
     for im_ind in range(num_images):
       dets = all_boxes[cls_ind][im_ind]
       if dets == []:
-        continue
 
       x1 = dets[:, 0]
       y1 = dets[:, 1]
@@ -154,8 +153,7 @@ def test_net(sess, net, imdb, weights_filename, max_per_image=100, thresh=0.05):
   # timers
   _t = {'im_detect' : Timer(), 'misc' : Timer()}
 
-  for i in range(2):
-#   for i in range(num_images):
+  for i in range(num_images):
     im = cv2.imread(imdb.image_path_at(i))
 
     _t['im_detect'].tic()
