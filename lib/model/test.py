@@ -122,6 +122,7 @@ def apply_nms(all_boxes, thresh):
     for im_ind in range(num_images):
       dets = all_boxes[cls_ind][im_ind]
       if dets == []:
+        continue
 
       x1 = dets[:, 0]
       y1 = dets[:, 1]
