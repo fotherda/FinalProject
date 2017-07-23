@@ -379,7 +379,7 @@ def get_layer_names():
                                  '/bottleneck_v1/conv2/weights') )
     return layers
     
-def get_Ks(layer, K_fractions):
+def get_Kmax(layer):
   shape = None
   for v in tf.global_variables():
     if layer.layer_weights() in v.name:
@@ -389,8 +389,11 @@ def get_Ks(layer, K_fractions):
     raise Exception('layer not found') 
       
   H,W,C,N = shape
-  
   Kmax = int(C*W*H*N / (C*W + H*N)) # if K > Kmax will have more parameters in sep layer
+  return Kmax
+      
+def get_Ks(layer, K_fractions):
+  Kmax = get_Kmax(layer)
   
   Ks = []
   for K_frac in K_fractions:
@@ -400,18 +403,22 @@ def get_Ks(layer, K_fractions):
     if K > Kmax:
       K = Kmax
     Ks.append(K)
-    
   return Ks
-      
+            
       
 def pre_tasks():
     return
-    stats = CompressionStats(filename='CompressionStats_.pi')
+    stats = CompressionStats(filename='CompressionStats_save2.pi')
 #     stats = CompressionStats(filename='CompressionStats_allx5K.pi')
 #     stats.plot(plot_type_label=('base_mean','diff_mean','mAP_1000_top150'))
 
-    stats.plot_by_Kfracs(Kfracs = [0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1], 
-                         plot_type_label=('var_redux'))
+#     stats.plot_single_layers(get_layer_names(), Kfracs=[0,0.1,0.25,0.5,1.0], 
+#                              plot_type_label='diff_mean', ylabel='mean reconstruction error')
+#                               plot_type_label='mAP_200_top150', ylabel='mAP')
+
+    stats.plot_correlation()
+#     stats.plot_by_Kfracs(Kfracs = [0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1], 
+#                          plot_type_label=('var_redux'))
 #     stats.plot_K_by_layer(get_layer_names(), Kfracs = [0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1], plot_type_label=('mAP_200_top150'))
 
 
@@ -476,11 +483,9 @@ def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
         writer = tf.summary.FileWriter(logdir=outdir, graph=sess.graph)
         writer.flush()
   
-  
   #     graph_def = tf.get_default_graph().as_graph_def()
   #     graphpb_txt = str(a.graph.as_graph_def())
   #     with open('graphpb.txt', 'w') as f: f.write(graphpb_txt)
-  
   
       tf.train.write_graph(tf.get_default_graph(), outdir, 'resnet101_v1', as_text=False)
 
@@ -516,7 +521,8 @@ def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
       if l not in layer_idxs:
         continue
       sess = tf.Session(config=tfconfig)
-      Kfracs = [0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1]
+      Kfracs = [0.05,0.1,0.2,0.3,0.4,0.6,]
+#       Kfracs = [0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1]
       Ks = get_Ks(layer_name, Kfracs)
       for j, k in enumerate(Ks):
 #         if j not in [0,1,2,3,]:
@@ -547,8 +553,8 @@ def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
         stats.set(K_by_layer_dict, 'diff_max', diff_max)
         stats.set(K_by_layer_dict, 'var_redux', sep_net.get_reduced_var_count())
 
-        num_imgs = 4952
-#         num_imgs = 200
+#         num_imgs = 4952
+        num_imgs = 200
         mAP = sep_net.run_test_metric(num_imgs)
         stats.set(K_by_layer_dict, 'mAP_%d_top%d'%(num_imgs,cfg.TEST.RPN_POST_NMS_TOP_N), mAP)
         stats.save()

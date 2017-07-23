@@ -7,6 +7,7 @@ import numpy as np
 import pickle as pi
 import matplotlib as mp
 import matplotlib.pyplot as plt
+import re
 
 from collections import OrderedDict,defaultdict
 from matplotlib.ticker import MaxNLocator
@@ -16,8 +17,10 @@ class CompressedNetDescription(dict):
    
   def __init__(self, compressed_layers, Ks):
     items = []
+    self._Ks = []
     for layer, K in zip(compressed_layers,Ks):
       self[layer] = K
+      self._Ks.append(K)
       items.extend((layer, K))
     self._key = tuple(items)
       
@@ -29,9 +32,12 @@ class CompressedNetDescription(dict):
         return self.__key() == other.__key()
     return False
   
-
   def __hash__(self):
     return hash(self.__key())
+  
+  def __str__(self):
+    return '\n'.join(map(str, sorted(self.iteritems())))
+
 
 class CompressionStats(object):
 
@@ -156,6 +162,66 @@ class CompressionStats(object):
     layers_names = [name.replace('/bottleneck_v1/conv2','') for name in layers_names]
     plt.xticks(x, layers_names, rotation='vertical')
     plt.legend(legend_labels, title=r'fraction of $K_{max}$')
+    plt.show()  
+     
+  def plot_single_layers(self, layers_names, Kfracs, plot_type_label=None, ylabel=None):
+    plt.title('Effects of single layer compressions',fontsize=16)
+    legend_labels = []
+    num_Kfracs = len(Kfracs)
+    xs = range(1,len(layers_names)+1)
+    plot_data = np.empty((len(layers_names), num_Kfracs))
+     
+    for ii, (net_desc, data_dict) in enumerate(sorted(self._stats.iteritems())):
+      for i, (type_label, value) in enumerate(sorted(data_dict.iteritems())):
+        if plot_type_label and type_label not in plot_type_label:
+          continue
+        layer_idx = layers_names.index(list(net_desc.keys())[0])
+        Kfrac_idx = ii % num_Kfracs
+        plot_data[layer_idx, Kfrac_idx] = value        
+    
+    for Kfrac_idx, Kfrac in enumerate(Kfracs):
+      plt.plot(xs, plot_data[:,Kfrac_idx],'o-')
+      legend_labels.append('%.2f'%Kfrac)
+    legend_labels[0] = 'K=1'  
+      
+    plt.ylabel(ylabel, fontsize=16)
+    plt.xlabel('layer', fontsize=16)
+    
+#     layers_names = [name.replace('/bottleneck_v1/conv2','') for name in layers_names]
+#     plt.xticks(x, layers_names, rotation='vertical')
+    plt.legend(legend_labels, title=r'fraction of $K_{max}$')
+    plt.show()  
+     
+       
+  def plot_correlation(self):
+#     plt.title('Profile of layer compressions',fontsize=16)
+#     legend_labels = []
+     
+    x = []
+    y = []
+    for ii, (net_desc, data_dict) in enumerate(sorted(self._stats . iteritems())):
+      
+      mAP = [data_dict[key] for key in data_dict.keys() if re.match('mAP', key)]
+      diff_mean = data_dict['diff_mean']
+      x.append(mAP[0])
+      y.append(diff_mean)
+      
+      print( net_desc )
+
+    plt.plot(x, y,'.')
+#     legend_labels.append('%.2f'%Kfracs[ii])
+        
+#     np.corcoef()
+    
+    plt.xlabel('mAP', fontsize=16)
+    plt.ylabel('mean reconstruction error', fontsize=16)
+    x1,x2,y1,y2 = plt.axis()
+#     plt.axis((0.7,0.8,y1,y2))
+
+#     
+#     layers_names = [name.replace('/bottleneck_v1/conv2','') for name in layers_names]
+#     plt.xticks(x, layers_names, rotation='vertical')
+#     plt.legend(legend_labels, title=r'fraction of $K_{max}$')
     plt.show()  
      
        
