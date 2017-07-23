@@ -408,7 +408,14 @@ def get_Ks(layer, K_fractions):
       
 def pre_tasks():
     return
-    stats = CompressionStats(filename='CompressionStats_save2.pi')
+#     stats = CompressionStats(filename='CompressionStats_Kfracx9.pi')
+#     stats = CompressionStats(filename='CompressionStats_Kfrac0.32-0.38.pi')
+#     stats = CompressionStats(filename='CompressionStats_Kfrac0.05-0.6.pi')
+    stats = CompressionStats(filename='CompressionStats_.pi')
+#     stats = CompressionStats(filename='CompressionStats_save2.pi')
+#     stats.merge('CompressionStats_Kfrac0.32-0.38.pi')
+#     stats.merge('CompressionStats_save2.pi')
+#     stats.save('mergeTest')
 #     stats = CompressionStats(filename='CompressionStats_allx5K.pi')
 #     stats.plot(plot_type_label=('base_mean','diff_mean','mAP_1000_top150'))
 
@@ -416,12 +423,11 @@ def pre_tasks():
 #                              plot_type_label='diff_mean', ylabel='mean reconstruction error')
 #                               plot_type_label='mAP_200_top150', ylabel='mAP')
 
-    stats.plot_correlation()
+#     stats.plot_correlation()
+    stats.plot_correlation([0.05,0.1,0.2,0.3,0.32,0.34,0.36,0.38,0.4,0.5,0.6,0.75,0.9,1.0])
 #     stats.plot_by_Kfracs(Kfracs = [0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1], 
 #                          plot_type_label=('var_redux'))
 #     stats.plot_K_by_layer(get_layer_names(), Kfracs = [0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1], plot_type_label=('mAP_200_top150'))
-
-
 #     stats.plot(plot_type_label=('base_mean','diff_mean','var_redux','mAP_10_top100'))
     exit()
 
@@ -516,13 +522,15 @@ def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
 
     sess.close()
     scope_idx=1
+    layers_names.remove('conv1')
 #     with default_graph.as_default():
     for l, layer_name in enumerate(layers_names):
       if l not in layer_idxs:
         continue
       sess = tf.Session(config=tfconfig)
-      Kfracs = [0.05,0.1,0.2,0.3,0.4,0.6,]
-#       Kfracs = [0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1]
+#       Kfracs = [0.3]
+#       Kfracs = [0.05,0.1,0.2,0.3,0.4,0.6]
+      Kfracs = [0.05,0.1,0.2,0.4,0.5,0.6,0.7,1]
       Ks = get_Ks(layer_name, Kfracs)
       for j, k in enumerate(Ks):
 #         if j not in [0,1,2,3,]:

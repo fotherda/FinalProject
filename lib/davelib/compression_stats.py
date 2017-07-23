@@ -58,8 +58,22 @@ class CompressionStats(object):
 #     for keys in self._stats.keys():
 #       print keys
     
-  def save(self):
-    pi.dump( self._stats, open( 'CompressionStats_%s.pi'%self._filename_suffix, "wb" ) )
+  def save(self, suffix=None):
+    if not suffix:
+      suffix = self._filename_suffix
+    pi.dump( self._stats, open( 'CompressionStats_%s.pi'%suffix, "wb" ) )
+
+
+  def merge(self, filename):
+    other_stats = pi.load( open( filename, "rb" ) ) 
+    
+    for ii, (net_desc, data_dict) in enumerate(sorted(other_stats.iteritems())):
+      if net_desc in self._stats:
+        print('net_desc already exists')
+        continue
+      else:
+        self._stats[net_desc] = data_dict
+
 
   def build_label_layer_K_dict(self):
     new_dict = defaultdict( lambda: defaultdict (lambda: defaultdict(float)) )
@@ -193,24 +207,20 @@ class CompressionStats(object):
     plt.show()  
      
        
-  def plot_correlation(self):
-#     plt.title('Profile of layer compressions',fontsize=16)
+  def plot_correlation(self, labels=None):
 #     legend_labels = []
-     
-    x = []
-    y = []
+    xs = []
+    ys = []
+
     for ii, (net_desc, data_dict) in enumerate(sorted(self._stats . iteritems())):
-      
+      net_desc
       mAP = [data_dict[key] for key in data_dict.keys() if re.match('mAP', key)]
       diff_mean = data_dict['diff_mean']
-      x.append(mAP[0])
-      y.append(diff_mean)
-      
+      xs.append(mAP[0])
+      ys.append(diff_mean)
       print( net_desc )
 
-    plt.plot(x, y,'.')
-#     legend_labels.append('%.2f'%Kfracs[ii])
-        
+    plt.plot(xs, ys,'.r')
 #     np.corcoef()
     
     plt.xlabel('mAP', fontsize=16)
@@ -218,10 +228,17 @@ class CompressionStats(object):
     x1,x2,y1,y2 = plt.axis()
 #     plt.axis((0.7,0.8,y1,y2))
 
-#     
-#     layers_names = [name.replace('/bottleneck_v1/conv2','') for name in layers_names]
-#     plt.xticks(x, layers_names, rotation='vertical')
-#     plt.legend(legend_labels, title=r'fraction of $K_{max}$')
+    if labels:
+      for label, x, y in zip(labels, xs, ys):
+        plt.annotate(
+            str(label),
+            xy=(x, y), xytext=(20, -10),
+            textcoords='offset points', ha='right', va='bottom',
+  #           bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
+  #           bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
+  #           arrowprops=dict(arrowstyle = '->', connectionstyle='arc3,rad=0')
+            )
+
     plt.show()  
      
        
