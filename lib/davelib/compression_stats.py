@@ -25,8 +25,11 @@ class CompressedNetDescription(dict):
     self._key = tuple(items)
       
   def __key(self):
-    return self._key
+    return self['conv1']
   
+#   def __key(self):
+#     return self._key
+#   
   def __eq__(self, other):
     if isinstance(other, self.__class__):
         return self.__key() == other.__key()
@@ -38,16 +41,51 @@ class CompressedNetDescription(dict):
   def __str__(self):
     return '\n'.join(map(str, sorted(self.iteritems())))
 
+  def get_Kfrac(self):
+    for layer, K in self.iteritems():
+      if 'block4' in layer:
+        Kfrac = K / 768.0
+        break
+      elif 'block3' in layer:
+        Kfrac = K / 384.0
+        break
+        
+    return Kfrac
+
 
 class CompressionStats(object):
 
-  def __init__(self, filename=None, filename_suffix=''):
-    
+  def __init__(self, filename_suffix=''):
     self._filename_suffix = filename_suffix
-    if filename: #load from pickle file
-      self.load_from_file(filename)
+    if filename_suffix: #load from pickle file
+      self.load_from_file('CompressionStats_'+filename_suffix+'.pi')
     else:  
       self._stats = defaultdict( defaultdict )
+      
+  def __str__(self):
+    str_list = []
+    for K_by_layer_dict, d in self._stats.iteritems():
+      str_list.append(str(K_by_layer_dict))
+      str_list.append('\n')
+      
+      for type_label, value in d.iteritems():
+        str_list.append(type_label + '\t' + str(value) + '\n')
+    return ''.join(str_list)
+  
+  
+  def print_Kfracs(self):
+    str_list = []
+    str_list.append('Kfracs:\n')
+    for net_desc, d in self._stats.iteritems():
+      str_list.append('%.2f'%net_desc.get_Kfrac())
+      str_list.append('\n')
+
+    str_list.append('Data Types:\n')
+    for type_label in d:
+        str_list.append(type_label + '\n')
+    
+    print( ''.join(str_list) )
+  
   
   def load_from_file(self, filename):  
     self._stats = pi.load( open( filename, "rb" ) ) 
@@ -63,14 +101,21 @@ class CompressionStats(object):
       suffix = self._filename_suffix
     pi.dump( self._stats, open( 'CompressionStats_%s.pi'%suffix, "wb" ) )
 
-
+  def add_data_type(self, type_label, values): #values must be in order to match sorted net descriptions
+    for i, (K_by_layer_dict, d) in enumerate(sorted(self._stats.iteritems())):
+      print(str(K_by_layer_dict['conv1']))
+      d[type_label] = values[i]
+    
   def merge(self, filename):
     other_stats = pi.load( open( filename, "rb" ) ) 
     
-    for ii, (net_desc, data_dict) in enumerate(sorted(other_stats.iteritems())):
+    for net_desc, data_dict in sorted(other_stats.iteritems()):
       if net_desc in self._stats:
         print('net_desc already exists')
-        continue
+        for type_label, d in sorted(data_dict.iteritems()):
+          if type_label not in self._stats[net_desc]:
+            self._stats[net_desc][type_label] = d
+            print('added ' + type_label) 
       else:
         self._stats[net_desc] = data_dict
 
@@ -133,20 +178,23 @@ class CompressionStats(object):
     plt.show()  
 
      
-  def plot_by_Kfracs(self, Kfracs, plot_type_label=None):
+  def plot_by_Kfracs(self, plot_type_label=None):
     base_total = 47567455 # total no. parameters in base net
     plot_data = []
+    calced_Kfracs = [] 
      
-    for ii, (net_desc, data_dict) in enumerate(sorted(self._stats.iteritems())):
-      for i, (type_label, value) in enumerate(sorted(data_dict.iteritems())):
-        if plot_type_label and type_label not in plot_type_label:
+    for net_desc, data_dict in sorted(self._stats.iteritems()):
+      for type_label, value in sorted(data_dict.iteritems()):
+        if plot_type_label and plot_type_label not in type_label:
           continue
         if type_label =='var_redux':
           value = int( (base_total - value) / 1000000 )
         plot_data.append(value)
+        calced_Kfracs.append( net_desc.get_Kfrac() )
         
     plt.ticklabel_format(style='plain')
-    plt.plot(Kfracs, plot_data,'o-')
+    plt.plot(calced_Kfracs, plot_data,'o-')
+#     plt.plot(Kfracs, plot_data,'o-')
     plt.ylabel('No. parameters in net $x10^6$')
 #     plt.ylabel('mAP')
     plt.xlabel(r'fraction of $K_{max}$')
@@ -207,38 +255,116 @@ class CompressionStats(object):
     plt.show()  
      
        
-  def plot_correlation(self, labels=None):
+  def plot_correlation(self, type_labels, labels=None):
 #     legend_labels = []
+    if not labels:
+      labels=[]
+
+    for type_label in type_labels:
+      xs = []
+      ys = []
+  
+      for net_desc, data_dict in sorted(self._stats . iteritems()):
+#         net_desc
+        mAP = [data_dict[key] for key in data_dict.keys() if re.match('mAP', key)]
+        if type_label in data_dict:
+          diff_mean = data_dict[type_label]
+          xs.append(mAP[0])
+          ys.append(diff_mean)
+          print( net_desc )
+          labels.append('%.2f'%net_desc.get_Kfrac())
+  
+      plt.plot(xs, ys,'.')
+  #     np.corcoef()
+      
+      plt.xlabel('mAP', fontsize=16)
+      plt.ylabel('mean reconstruction error', fontsize=16)
+  #     x1,x2,y1,y2 = plt.axis()
+  #     plt.axis((0.7,0.8,y1,y2))
+  
+      if labels:
+        for label, x, y in zip(labels, xs, ys):
+          plt.annotate(
+              str(label),
+              xy=(x, y), xytext=(20, -10),
+              textcoords='offset points', ha='right', va='bottom',
+    #           bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
+    #           bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
+    #           arrowprops=dict(arrowstyle = '->', connectionstyle='arc3,rad=0')
+              )
+
+    plt.legend(['block4 output','block3 output'])
+    plt.show()  
+     
+     
+  def data_dict_from_Kfrac(self, Kfrac):
+    for net_desc, data_dict in sorted(self._stats.iteritems()):
+      if abs(net_desc.get_Kfrac() - Kfrac) < 1.0e-9:
+        return data_dict
+    return None
+        
+       
+  def get_key_value_match(self, d, match_key_pattern):     
+    for key, value in d.iteritems():
+      if re.match(match_key_pattern, key):
+        return value
+    return None
+      
+      
+  def plot_correlation_btw_stats(self, other_stats, type_label, labels=None):
+#     legend_labels = []
+    if not labels:
+      labels=[]
+
     xs = []
     ys = []
 
-    for ii, (net_desc, data_dict) in enumerate(sorted(self._stats . iteritems())):
-      net_desc
-      mAP = [data_dict[key] for key in data_dict.keys() if re.match('mAP', key)]
-      diff_mean = data_dict['diff_mean']
-      xs.append(mAP[0])
-      ys.append(diff_mean)
-      print( net_desc )
+    for net_desc, data_dict in sorted(self._stats . iteritems()):
+      value = self.get_key_value_match(data_dict, type_label)
+      if value:
+        other_data_dict = other_stats.data_dict_from_Kfrac(net_desc.get_Kfrac())
+        if other_data_dict:
+          other_value = self.get_key_value_match(other_data_dict, type_label)
+          ys.append(value)
+          xs.append(other_value)
+#           print( net_desc )
+          labels.append('%.2f'%net_desc.get_Kfrac())
 
-    plt.plot(xs, ys,'.r')
-#     np.corcoef()
-    
-    plt.xlabel('mAP', fontsize=16)
-    plt.ylabel('mean reconstruction error', fontsize=16)
-    x1,x2,y1,y2 = plt.axis()
-#     plt.axis((0.7,0.8,y1,y2))
+      plt.plot(xs, ys,'.')
+  
+      
+      
+  #     x1,x2,y1,y2 = plt.axis()
+  #     plt.axis((0.7,0.8,y1,y2))
+  
+      if labels:
+        for label, x, y in zip(labels, xs, ys):
+          if label == '0.40':
+            xoffset = -20
+          else:
+            xoffset = 30
+            
+          if label == '0.60':
+            yoffset = 10
+          elif label == '0.50':
+            yoffset = -20
+          else:
+            yoffset = -10
+            
+          plt.annotate(
+              str(label),
+              xy=(x, y), xytext=(xoffset, yoffset),
+              textcoords='offset points', ha='right', va='bottom',
+    #           bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
+    #           bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
+              arrowprops=dict(arrowstyle = '->', connectionstyle='arc3,rad=0')
+              )
 
-    if labels:
-      for label, x, y in zip(labels, xs, ys):
-        plt.annotate(
-            str(label),
-            xy=(x, y), xytext=(20, -10),
-            textcoords='offset points', ha='right', va='bottom',
-  #           bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
-  #           bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
-  #           arrowprops=dict(arrowstyle = '->', connectionstyle='arc3,rad=0')
-            )
-
+    plt.ylabel(type_label+' #images 200', fontsize=16)
+    plt.xlabel(type_label+' #images 4952', fontsize=16)
+    nxs = np.vstack((xs,ys))
+    corr_coeff = np.corrcoef(nxs)
+    plt.text(0.2, 0.65, 'corr coeff = %.3f'%corr_coeff[0,1], fontsize=16, horizontalalignment='center', verticalalignment='center')
     plt.show()  
      
        

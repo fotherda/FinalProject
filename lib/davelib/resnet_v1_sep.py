@@ -104,57 +104,12 @@ class resnetv1_sep(resnetv1):
     self._resnet_scope = 'resnet_v1_sep%d_%d' % (scope_idx, num_layers)  
     self._comp_weights_dict = comp_weights_dict
     self._K_by_layer_dict = K_by_layer_dict
+    self.bottleneck_func = self.bottleneck
+    self._end_points_collection = self._resnet_scope + '_end_points'
 
-  def build_network(self, sess, is_training=True):
-    # select initializers
-    if cfg.TRAIN.TRUNCATED:
-      initializer = tf.truncated_normal_initializer(mean=0.0, stddev=0.01)
-      initializer_bbox = tf.truncated_normal_initializer(mean=0.0, stddev=0.001)
-    else:
-      initializer = tf.random_normal_initializer(mean=0.0, stddev=0.01)
-      initializer_bbox = tf.random_normal_initializer(mean=0.0, stddev=0.001)
-    bottleneck = resnet_v1.bottleneck
-    # choose different blocks for different number of layers
-    if self._num_layers == 50:
-      blocks = [
-        resnet_utils.Block('block1', self.bottleneck,
-                           [(256, 64, 1)] * 2 + [(256, 64, 2)]),
-        resnet_utils.Block('block2', self.bottleneck,
-                           [(512, 128, 1)] * 3 + [(512, 128, 2)]),
-        # Use stride-1 for the last conv4 layer
-        resnet_utils.Block('block3', self.bottleneck,
-                           [(1024, 256, 1)] * 5 + [(1024, 256, 1)]),
-        resnet_utils.Block('block4', self.bottleneck, [(2048, 512, 1)] * 3)
-      ]
-    elif self._num_layers == 101:
-      blocks = [
-        resnet_utils.Block('block1', self.bottleneck,
-                           [(256, 64, 1)] * 2 + [(256, 64, 2)]),
-        resnet_utils.Block('block2', self.bottleneck,
-                           [(512, 128, 1)] * 3 + [(512, 128, 2)]),
-        # Use stride-1 for the last conv4 layer
-        resnet_utils.Block('block3', self.bottleneck,
-                           [(1024, 256, 1)] * 22 + [(1024, 256, 1)]),
-        resnet_utils.Block('block4', self.bottleneck, [(2048, 512, 1)] * 3)
-      ]
-    elif self._num_layers == 152:
-      blocks = [
-        resnet_utils.Block('block1', self.bottleneck,
-                           [(256, 64, 1)] * 2 + [(256, 64, 2)]),
-        resnet_utils.Block('block2', self.bottleneck,
-                           [(512, 128, 1)] * 7 + [(512, 128, 2)]),
-        # Use stride-1 for the last conv4 layer
-        resnet_utils.Block('block3', self.bottleneck,
-                           [(1024, 256, 1)] * 35 + [(1024, 256, 1)]),
-        resnet_utils.Block('block4', self.bottleneck, [(2048, 512, 1)] * 3)
-      ]
-    else:
-      # other numbers are not supported
-      raise NotImplementedError
-     
-    return self.build_network_sub(blocks, is_training, initializer, initializer_bbox)
 
-  @add_arg_scope
+
+#   @add_arg_scope
   def bottleneck(self,
                  inputs,
                  depth,
@@ -164,14 +119,14 @@ class resnetv1_sep(resnetv1):
                  outputs_collections=None,
                  scope=None):
     """Bottleneck residual unit variant with BN after convolutions.
-  
+   
     This is the original residual unit proposed in [1]. See Fig. 1(a) of [2] for
     its definition. Note that we use here the bottleneck variant which has an
     extra bottleneck layer.
-  
+   
     When putting together two consecutive ResNet blocks that use this unit, one
     should use stride = 2 in the last unit of the first block.
-  
+   
     Args:
       inputs: A tensor of size [batch, height, width, channels].
       depth: The depth of the ResNet unit output.
@@ -181,7 +136,7 @@ class resnetv1_sep(resnetv1):
       rate: An integer, rate for atrous convolution.
       outputs_collections: Collection to add the ResNet unit output.
       scope: Optional variable_scope.
-  
+   
     Returns:
       The ResNet unit's output.
     """
@@ -196,10 +151,10 @@ class resnetv1_sep(resnetv1):
             stride=stride,
             activation_fn=None,
             scope='shortcut')
-  
+   
       residual = layers.conv2d(
           inputs, depth_bottleneck, [1, 1], stride=1, scope='conv1')
-      
+       
       layer_name = LayerName(sc.name + '/conv2', 'net_layer')
 #       name = sc.name.replace(self._resnet_scope,'') + '/conv2'
       if layer_name in self._comp_weights_dict.keys():
@@ -210,9 +165,9 @@ class resnetv1_sep(resnetv1):
                                             rate=rate, scope='conv2')
       residual = layers.conv2d(
           residual, depth, [1, 1], stride=1, activation_fn=None, scope='conv3')
-  
+   
       output = nn_ops.relu(shortcut + residual)
-  
+   
       return utils.collect_named_outputs(outputs_collections, sc.name, output)
 
   def separate_conv_layer(self, inputs, num_output_channels, kernel_size, stride, rate,
@@ -238,6 +193,37 @@ class resnetv1_sep(resnetv1):
       
     return net
     
+  def rpn_convolution(self, net_conv4, is_training, initializer):
+    layer_name = 'rpn_conv/3x3'
+
+    if layer_name not in self._comp_weights_dict.keys():
+      return slim.conv2d(net_conv4, 512, [3, 3], trainable=is_training, weights_initializer=initializer,
+                        scope=layer_name)
+
+    K = self._K_by_layer_dict[layer_name]
+    layer1_name = LayerName(layer_name.replace('conv', 'convsep'))
+    with arg_scope(
+      [slim.conv2d],
+      trainable=False,
+      normalizer_fn=None,
+      normalizer_params=None,
+      biases_initializer=None,
+      biases_regularizer=None): #make first layer clean, no BN no biases no activation func
+     
+      net = slim.conv2d(net_conv4, K, [3, 1], trainable=is_training, weights_initializer=initializer,
+                        scope=layer1_name)
+
+    with slim.arg_scope(resnet_arg_scope(is_training=False)):
+      with arg_scope(
+        [slim.conv2d],
+        trainable=False,
+        normalizer_fn=None,
+        normalizer_params=None): #make second layer no BN but with biases
+        net = slim.conv2d(net, 512, [1, 3], trainable=is_training, weights_initializer=initializer,
+                          scope=layer_name)
+    return net
+
+  
   def build_base(self):
     layer_name = LayerName('conv1')
     if layer_name in self._comp_weights_dict.keys():
@@ -248,36 +234,7 @@ class resnetv1_sep(resnetv1):
                                        full_layer_name=layer_name)
   
         end_points_collection = self._resnet_scope + '_end_points'
-        utils.collect_named_outputs(end_points_collection, self._resnet_scope+'/conv1', net)
-
-  #       with arg_scope(
-  #         [slim.conv2d],
-  #         weights_regularizer=None,
-  #         weights_initializer=None,
-  #         trainable=False,
-  #         activation_fn=None,
-  #         normalizer_fn=None,
-  #         normalizer_params=None,
-  #         biases_initializer=None): #make first layer clean, no BN no biases no activation func
-  # 
-  #         net = conv2d_same(, self._K, kernel_size=(7,1), stride=[2,1], scope='conv1_1')
-  # #         net = conv2d_same(self._image, self._K, kernel_size=(1,7), stride=[1,2], scope='conv1_1')
-  #         self._predictions["conv1_1"] = net
-  #       
-  # #       with arg_scope(
-  # #         [slim.conv2d],
-  # #         weights_regularizer=None,
-  # #         weights_initializer=None,
-  # #         trainable=False,
-  # #         activation_fn=None,
-  # #         normalizer_fn=None,
-  # #         normalizer_params=None,
-  # #         biases_initializer=None): #make first layer clean, no BN no biases
-  #       with slim.arg_scope(resnet_arg_scope(is_training=False)):
-  # #         net = conv2d_same(net, N, kernel_size=(7,1), stride=[2,1], scope='conv1_2')
-  #         net = conv2d_same(net, N, kernel_size=(1,7), stride=[1,2], scope='conv1_2')
-  #         self._predictions["conv1_2"] = net
-        
+        utils.collect_named_outputs(end_points_collection, self._resnet_scope+'/conv1', net)        
         net = tf.pad(net, [[0, 0], [1, 1], [1, 1], [0, 0]])
         net = slim.max_pool2d(net, [3, 3], stride=2, padding='VALID', scope='pool1')
     else:

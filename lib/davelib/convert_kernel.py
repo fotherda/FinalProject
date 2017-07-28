@@ -39,13 +39,19 @@ figure_path = '/home/david/host/figures'
 def show_all_variables(show, *args):
   total_count = 0
   for idx, op in enumerate(tf.global_variables()):
+    shape = (0)
     if args:
       for name_filter in args:
         if name_filter not in op.name:
           continue
-    shape = op.get_shape()
+        else:
+          shape = op.get_shape()
+    else:
+      shape = op.get_shape()
+    
     count = np.prod(shape)
-    if show:
+      
+    if show and count>0:
       print("[%2d] %s %s = %s" % (idx, op.name, shape, count))
     total_count += int(count)
   if show:
@@ -120,6 +126,7 @@ class SeparableNet(object):
     self._net_sep.create_architecture(self._sess, "TEST", 21,
                           tag='default', anchor_scales=[8, 16, 32])
 #     init = tf.global_variables_initializer()
+#     show_all_variables(True, self._net_sep.get_scope())
 
     self._reduced_var_count = self.calc_variable_count(var_count_dict)
     self.assign_trained_weights_to_unchanged_layers()
@@ -377,7 +384,15 @@ def get_layer_names():
       for unit_num in range(1,num_layers+1):
         layers.append( LayerName('block'+block_num+'/unit_'+str(unit_num)+
                                  '/bottleneck_v1/conv2/weights') )
+    
+    layers.append( LayerName('rpn_conv/3x3/weights') ) 
     return layers
+  
+def remove_layers_after_block3(layer_names):  
+  
+  filtered = [ v for v in layer_names[:] if 'block4' not in v and 'rpn_conv' not in v ]
+  
+  return filtered
     
 def get_Kmax(layer):
   shape = None
@@ -404,18 +419,34 @@ def get_Ks(layer, K_fractions):
       K = Kmax
     Ks.append(K)
   return Ks
-            
+      
+      
       
 def pre_tasks():
     return
+
+#     stats = CompressionStats(filename='CompressionStats_.pi')
+#     print(stats)
+
 #     stats = CompressionStats(filename='CompressionStats_Kfracx9.pi')
 #     stats = CompressionStats(filename='CompressionStats_Kfrac0.32-0.38.pi')
+    stats = CompressionStats('block3_4_mAP_corrn')
+    stats2 = CompressionStats('4952_top150')
+    stats2.print_Kfracs()
 #     stats = CompressionStats(filename='CompressionStats_Kfrac0.05-0.6.pi')
-    stats = CompressionStats(filename='CompressionStats_.pi')
+#     stats = CompressionStats(filename='CompressionStats_noMap_Kfrac.pi')
 #     stats = CompressionStats(filename='CompressionStats_save2.pi')
 #     stats.merge('CompressionStats_Kfrac0.32-0.38.pi')
 #     stats.merge('CompressionStats_save2.pi')
-#     stats.save('mergeTest')
+#     stats.merge('CompressionStats_.pi')
+
+
+#     stats.add_data_type('diff_mean_block3', [0.620057,0.557226,0.426003,0.338981,0.170117,
+#                                              0.134585,0.0855217,0.0585074,0.0412037,0.0323449])
+#     stats.add_data_type('mAP_4952_top150', [0.0031,0.1165,0.5007,0.6012,0.7630,0.7769,
+#                                             0.7831,0.7819,0.7825])
+#  
+    stats.save('mergeTest')
 #     stats = CompressionStats(filename='CompressionStats_allx5K.pi')
 #     stats.plot(plot_type_label=('base_mean','diff_mean','mAP_1000_top150'))
 
@@ -423,12 +454,23 @@ def pre_tasks():
 #                              plot_type_label='diff_mean', ylabel='mean reconstruction error')
 #                               plot_type_label='mAP_200_top150', ylabel='mAP')
 
-#     stats.plot_correlation()
-    stats.plot_correlation([0.05,0.1,0.2,0.3,0.32,0.34,0.36,0.38,0.4,0.5,0.6,0.75,0.9,1.0])
-#     stats.plot_by_Kfracs(Kfracs = [0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1], 
-#                          plot_type_label=('var_redux'))
+#     stats.plot_correlation(['diff_mean'])
+    stats.plot_correlation_btw_stats(stats2, 'mAP')
+#     stats.plot_correlation(['diff_mean','diff_mean_block3'])
+#     stats.plot_correlation(['diff_mean','diff_mean_block3'],[0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.75,0.9,1.0])
+#     stats.plot_correlation('diff_mean_block3')
+#     stats.plot_correlation([0.05,0.1,0.2,0.3,0.32,0.34,0.36,0.38,0.4,0.5,0.6,0.75,0.9,1.0])
+#     stats.plot_by_Kfracs(#plot_type_label=('mAP_'))
+#                           plot_type_label=('var_redux'))
+#     stats = CompressionStats(filename='CompressionStats_.pi')
+#     print(stats)
+#     stats = CompressionStats(filename='CompressionStats_Kfrac0.05-1_noconv1.pi')
+    
+#     stats.plot_by_Kfracs(#plot_type_label=('mAP_'))
+#                           plot_type_label=('var_redux'))
+    
 #     stats.plot_K_by_layer(get_layer_names(), Kfracs = [0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.7,1], plot_type_label=('mAP_200_top150'))
-#     stats.plot(plot_type_label=('base_mean','diff_mean','var_redux','mAP_10_top100'))
+    stats.plot(plot_type_label=('base_mean','diff_mean','var_redux','mAP_10_top100'))
     exit()
 
     return
@@ -446,17 +488,71 @@ def pre_tasks():
     for n in graph_def.node: 
       if n.name == 'input' or n.name == 'output':
         print n
+     
+PARAMS_STAT_OPTIONS = {
+    'max_depth': 10000,
+    'min_bytes': 0,
+    'min_micros': 0,
+    'min_params': 1,
+    'min_float_ops': 0,
+    'device_regexes': ['.*'],
+    'order_by': 'params',
+    'account_type_regexes': ['.*'],
+    'start_name_regexes': ['.*'],
+    'trim_name_regexes': [],
+    'show_name_regexes': ['.*'],
+    'hide_name_regexes': [],
+    'account_displayed_op_only': True,
+    'select': ['params','tensor_value','micros', 'bytes','op_types','float_ops',
+               'shapes','num_hidden_ops'],
+    'viz': False,
+    'dump_to_file': ''
+}
+   
+def profile(run_metadata):
+  # Set tfprof_cmd='code' to associate statistics with Python codes.
+  
+  stats = tf.contrib.tfprof.model_analyzer.print_model_analysis(
+      tf.get_default_graph(),
+      run_meta=run_metadata,
+      tfprof_options=PARAMS_STAT_OPTIONS)
+  
+#   res = list(stats.DESCRIPTOR.fields_by_name.keys())
+  fields = ['name', 'tensor_value', 'exec_micros', 'requested_bytes', 'parameters', 
+   'float_ops', 'inputs', 'device', 'total_exec_micros', 'total_requested_bytes', 
+   'total_parameters', 'total_float_ops', 'total_inputs', 'shapes', 'children']
+
+  l = stats.ListFields()
+  
+  for k, v in stats.ListFields():
+    print(k.camelcase_name + ': ' + str(v))
+#     value = stats.name
+#     value = stats.total_parameters
+#     value = stats.float_ops
+
+  for child in stats.children:
+    print('\n')
+    for k, v in child.ListFields():
+      print(k.camelcase_name + ': ' + str(v))
+         
+
+  # param_stats is tensorflow.tfprof.TFGraphNodeProto proto.
+  sys.stdout.write('total_params: %d\n' % stats.total_parameters)
+    
       
 def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
 #     show_all_variables(True, 'resnet_v1_101/')
     
+#     Kmax = get_Kmax(LayerName('block4/unit_3/bottleneck_v1/conv2/weights'))
     blobs = get_blobs()
-    final_layer = LayerName('block4/unit_3/bottleneck_v1/conv3')
-    base_outputs = base_net.get_outputs(blobs, [final_layer], sess)
+#     final_layer = LayerName('fc7')
+    final_layer = LayerName('block3/unit_23/bottleneck_v1/conv3')
+#     final_layer = LayerName('block4/unit_3/bottleneck_v1/conv3')
+    base_outputs, run_metadata = base_net.get_outputs(blobs, [final_layer], sess)
     
     base_variables = tf.global_variables()
     default_graph = tf.get_default_graph()
-    outdir = osp.abspath(osp.join(cfg.ROOT_DIR, 'graph_defs'))      
+    outdir = osp.abspath(osp.join(cfg.ROOT_DIR, 'graph_defs/'))      
 
 #     saver = tf.train.Saver(restore_var_dict)
 #     saver.restore(self._sess, self._saved_model_path)
@@ -466,10 +562,23 @@ def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
 #     # Write the train and validation information to tensorboard
 #     self.writer = tf.summary.FileWriter(self.tbdir, sess.graph)
 
-    if False:
-      writer = tf.summary.FileWriter(logdir=outdir, graph=sess.graph)
-      writer.flush()
+    if True:
+      profile(run_metadata)
+#       g = tf.get_default_graph()
+#       for op in g.get_operations():
+#         flops = ops.get_stats_for_node_def(g, op.node_def, 'flops').value
+#       if flops is not None:
+#         print 'TF stats gives',flops
+
+      
+      
+      
+#       writer = tf.summary.FileWriter(logdir=outdir, graph=sess.graph)
+#       writer.flush()
   
+      tf.train.write_graph(sess.graph, logdir=outdir, name='test')
+      saver = tf.train.Saver()
+      path = saver.save(sess, outdir+'/test1')
   
       with sess.as_default():
         nodes_to_preserve = []
@@ -479,15 +588,17 @@ def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
           if n.name == 'resnet_v1_101/block1/unit_3/bottleneck_v1/conv3/weights/Initializer/truncated_normal/shape':
             break
           nodes_to_preserve.append(n.name)
-          print n
+#           print n
     
         
         subgraph = tf.graph_util.extract_sub_graph(default_graph.as_graph_def(), nodes_to_preserve)
         tf.reset_default_graph()
         tf.import_graph_def(subgraph)
     
-        writer = tf.summary.FileWriter(logdir=outdir, graph=sess.graph)
-        writer.flush()
+        tf.train.write_graph(sess.graph, logdir=outdir, name='test')
+      
+#         writer = tf.summary.FileWriter(logdir=outdir, graph=sess.graph)
+#         writer.flush()
   
   #     graph_def = tf.get_default_graph().as_graph_def()
   #     graphpb_txt = str(a.graph.as_graph_def())
@@ -511,31 +622,26 @@ def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
           all_comp_weights_dict[layer_name] = weights.eval()
 
 #     Ks = range(1,11)
-#     Ks = [1, 5, 20]
-#     Ks = [1, 250, 768]
     layer_idxs = [0]
-#     layer_idxs = range(34)
-#     layer_idxs = [10,20,31,33]
 
-#     stats = CompressionStats(filename='CompressionStats_31,33.pi', filename_suffix='31,33')
     stats = CompressionStats(filename_suffix='')
 
     sess.close()
     scope_idx=1
-    layers_names.remove('conv1')
+    layers_names = remove_layers_after_block3(layers_names)
+#     layers_names.remove('conv1')
 #     with default_graph.as_default():
     for l, layer_name in enumerate(layers_names):
       if l not in layer_idxs:
         continue
       sess = tf.Session(config=tfconfig)
-#       Kfracs = [0.3]
-#       Kfracs = [0.05,0.1,0.2,0.3,0.4,0.6]
-      Kfracs = [0.05,0.1,0.2,0.4,0.5,0.6,0.7,1]
+#       Kfracs = [0.32,0.34,0.36,0.38,0.4]
+      Kfracs = [0.7]
+#       Kfracs = [0.05,0.1,0.2,0.3,0.4,0.5,0.6,0.75,0.9,1]
       Ks = get_Ks(layer_name, Kfracs)
       for j, k in enumerate(Ks):
 #         if j not in [0,1,2,3,]:
 #           continue
-        
         K_by_layer = []
         comp_weights_dict = {}
         for layer_name in layers_names:
@@ -545,18 +651,14 @@ def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
         
         K_by_layer_dict = CompressedNetDescription(layers_names, K_by_layer)
         
-#         comp_weights_dict = { layer_name: all_comp_weights_dict[layer_name] }
-#         K_by_layer_dict = CompressedNetDescription([layer_name],[k])
-#           stats.set(K_by_layer_dict, 'dummy', 0)
-        
         sep_net = SeparableNet(scope_idx, base_net, sess, saved_model_path, comp_weights_dict,\
                                K_by_layer_dict, var_count_dict, base_variables)
         
         base_mean, diff_mean, diff_stdev, diff_max = \
           sep_net.compare_outputs(blobs, sess, base_outputs, final_layer)
-  
+   
         stats.set(K_by_layer_dict, 'base_mean', base_mean)
-        stats.set(K_by_layer_dict, 'diff_mean', diff_mean)
+        stats.set(K_by_layer_dict, 'diff_mean_block3', diff_mean)
         stats.set(K_by_layer_dict, 'diff_stdev', diff_stdev)
         stats.set(K_by_layer_dict, 'diff_max', diff_max)
         stats.set(K_by_layer_dict, 'var_redux', sep_net.get_reduced_var_count())
@@ -592,3 +694,4 @@ def view(base_net, sess, saved_model_path, tfconfig):
     exit()
 #     show_all_variables('resnet_v1_101/conv1')
 
+#ValueError: Variable resnet_v1_sep1_101/block3/unit_21/bottleneck_v1/convsep2/weights does not exist, or was not created with tf.get_variable(). Did you mean to set reuse=None in VarScope?
