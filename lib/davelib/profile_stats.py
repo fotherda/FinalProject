@@ -29,10 +29,10 @@ from copy_elements import copy_variable_to_graph
 from copy_elements import copy_op_to_graph
 
 
-STAT_OPTIONS = {
+PARAM_OPTIONS = {
     'max_depth': 10000,
-    'min_bytes': 0,
-    'min_micros': 0,
+    'min_bytes': 0,  # Only >=1
+    'min_micros': 0,  # Only >=1
     'min_params': 1,
     'min_float_ops': 0,
     'device_regexes': ['.*'],
@@ -43,8 +43,25 @@ STAT_OPTIONS = {
     'show_name_regexes': ['.*'],
     'hide_name_regexes': [],
     'account_displayed_op_only': True,
-    'select': ['params','tensor_value','micros', 'bytes','op_types','float_ops',
-               'num_hidden_ops'],
+    'select': ['bytes','params','op_types','tensor_value'],
+    'viz': False,
+    'dump_to_file': ''
+}
+PERF_OPTIONS = {
+    'max_depth': 10000,
+    'min_bytes': 0,  # Only >=1
+    'min_micros': 0,  # Only >=1
+    'min_params': 0,
+    'min_float_ops': 1,
+    'device_regexes': ['.*'],
+    'order_by': 'micros',
+    'account_type_regexes': ['.*'],
+    'start_name_regexes': ['.*'],
+    'trim_name_regexes': [],
+    'show_name_regexes': ['.*'],
+    'hide_name_regexes': [],
+    'account_displayed_op_only': True,
+    'select': ['float_ops','micros','bytes','op_types','tensor_value'],
     'viz': False,
     'dump_to_file': ''
 }
@@ -57,14 +74,23 @@ class ProfileStats(object):
   def __init__(self, net_desc, run_metadata):
     self._net_desc = net_desc
     self._run_metadata = run_metadata
-    tf.profiler
     
     
   def extract_data(self):
+#     tf.contrib.tfprof.model_analyzer.print_model_analysis(
+#         tf.get_default_graph(),
+#         run_meta=self._run_metadata,
+#         tfprof_options=tf.contrib.tfprof.model_analyzer.PRINT_ALL_TIMING_MEMORY)
+        
     stats = tf.contrib.tfprof.model_analyzer.print_model_analysis(
         tf.get_default_graph(),
         run_meta=self._run_metadata,
-        tfprof_options=STAT_OPTIONS)
+        tfprof_options=PARAM_OPTIONS)
+    
+    stats = tf.contrib.tfprof.model_analyzer.print_model_analysis(
+        tf.get_default_graph(),
+        run_meta=self._run_metadata,
+        tfprof_options=PERF_OPTIONS)
     
   #   res = list(stats.DESCRIPTOR.fields_by_name.keys())
     fields = ['name', 'tensor_value', 'exec_micros', 'requested_bytes', 'parameters', 
@@ -72,15 +98,15 @@ class ProfileStats(object):
      'total_parameters', 'total_float_ops', 'total_inputs', 'shapes', 'children']
   
     
-    for k, v in stats.ListFields():
-      print(k.camelcase_name + ': ' + str(v))
-  #     value = stats.name
-  #     value = stats.total_parameters
-  #     value = stats.float_ops
-  
-    for child in stats.children:
-      print('\n')
-      for k, v in child.ListFields():
-        print(k.camelcase_name + ': ' + str(v))
-           
+#     for k, v in stats.ListFields():
+#       print(k.camelcase_name + ': ' + str(v))
+#   #     value = stats.name
+#   #     value = stats.total_parameters
+#   #     value = stats.float_ops
+#   
+#     for child in stats.children:
+#       print('\n')
+#       for k, v in child.ListFields():
+#         print(k.camelcase_name + ': ' + str(v))
+#            
   

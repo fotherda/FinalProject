@@ -30,6 +30,7 @@ from operator import itemgetter
 from davelib.voc_img_sampler import VOCImgSampler
 from model.test import test_net, test_net_with_sample
 from datasets.factory import get_imdb
+from davelib.profile_stats import ProfileStats
 
 sys.path.append('/home/david/Project/tf-faster-rcnn_27/tools')
 from demo import *
@@ -489,56 +490,7 @@ def pre_tasks():
       if n.name == 'input' or n.name == 'output':
         print n
      
-PARAMS_STAT_OPTIONS = {
-    'max_depth': 10000,
-    'min_bytes': 0,
-    'min_micros': 0,
-    'min_params': 1,
-    'min_float_ops': 0,
-    'device_regexes': ['.*'],
-    'order_by': 'params',
-    'account_type_regexes': ['.*'],
-    'start_name_regexes': ['.*'],
-    'trim_name_regexes': [],
-    'show_name_regexes': ['.*'],
-    'hide_name_regexes': [],
-    'account_displayed_op_only': True,
-    'select': ['params','tensor_value','micros', 'bytes','op_types','float_ops',
-               'shapes','num_hidden_ops'],
-    'viz': False,
-    'dump_to_file': ''
-}
    
-def profile(run_metadata):
-  # Set tfprof_cmd='code' to associate statistics with Python codes.
-  
-  stats = tf.contrib.tfprof.model_analyzer.print_model_analysis(
-      tf.get_default_graph(),
-      run_meta=run_metadata,
-      tfprof_options=PARAMS_STAT_OPTIONS)
-  
-#   res = list(stats.DESCRIPTOR.fields_by_name.keys())
-  fields = ['name', 'tensor_value', 'exec_micros', 'requested_bytes', 'parameters', 
-   'float_ops', 'inputs', 'device', 'total_exec_micros', 'total_requested_bytes', 
-   'total_parameters', 'total_float_ops', 'total_inputs', 'shapes', 'children']
-
-  l = stats.ListFields()
-  
-  for k, v in stats.ListFields():
-    print(k.camelcase_name + ': ' + str(v))
-#     value = stats.name
-#     value = stats.total_parameters
-#     value = stats.float_ops
-
-  for child in stats.children:
-    print('\n')
-    for k, v in child.ListFields():
-      print(k.camelcase_name + ': ' + str(v))
-         
-
-  # param_stats is tensorflow.tfprof.TFGraphNodeProto proto.
-  sys.stdout.write('total_params: %d\n' % stats.total_parameters)
-    
       
 def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
 #     show_all_variables(True, 'resnet_v1_101/')
@@ -557,25 +509,15 @@ def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
 #     saver = tf.train.Saver(restore_var_dict)
 #     saver.restore(self._sess, self._saved_model_path)
 # 
-# 
 #     self.saver = tf.train.Saver(max_to_keep=100000)
 #     # Write the train and validation information to tensorboard
 #     self.writer = tf.summary.FileWriter(self.tbdir, sess.graph)
 
     if True:
-      profile(run_metadata)
-#       g = tf.get_default_graph()
-#       for op in g.get_operations():
-#         flops = ops.get_stats_for_node_def(g, op.node_def, 'flops').value
-#       if flops is not None:
-#         print 'TF stats gives',flops
-
+      profile_stats = ProfileStats(None, run_metadata)
+      profile_stats.extract_data()
+      exit()
       
-      
-      
-#       writer = tf.summary.FileWriter(logdir=outdir, graph=sess.graph)
-#       writer.flush()
-  
       tf.train.write_graph(sess.graph, logdir=outdir, name='test')
       saver = tf.train.Saver()
       path = saver.save(sess, outdir+'/test1')
@@ -589,7 +531,6 @@ def calc_reconstruction_errors(base_net, sess, saved_model_path, tfconfig):
             break
           nodes_to_preserve.append(n.name)
 #           print n
-    
         
         subgraph = tf.graph_util.extract_sub_graph(default_graph.as_graph_def(), nodes_to_preserve)
         tf.reset_default_graph()
